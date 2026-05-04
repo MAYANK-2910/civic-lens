@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getRole(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && getRole(request.auth.uid) == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function isOfficial() {
+      return hasRole('official') || isAdmin();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Validation Blueprints ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'role']) &&
+             data.uid == request.auth.uid &&
+             data.role in ['citizen', 'official', 'admin'] &&
+             (data.keys().size() <= 8);
+    }
+
+    function isValidFeedback(data) {
+      return data.keys().hasAll(['title', 'description', 'category', 'authorId']) &&
+             data.keys().size() <= 15 &&
+             data.title is string && data.title.size() <= 200 &&
+             data.description is string && data.description.size() <= 2000;
+    }
+
+    function isValidVote(data) {
+      return data.keys().hasAll(['feedbackId', 'userId', 'type']) &&
+             data.userId == request.auth.uid &&
+             data.type in ['upvote', 'downvote'];
+    }
+
+    function isValidBudget(data) {
+      return data.keys().hasAll(['department', 'category', 'amount', 'fiscalYear']) &&
+             data.amount is number &&
+             data.fiscalYear is string;
+    }
+
+    // --- Collection Matches ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (isOwner(userId) && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'phoneNumber']) &&
+         isValidUser(request.resource.data))
+      );
+    }
+
+    match /budgets/{budgetId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() && isValidBudget(request.resource.data);
+    }
+
+    match /feedback/{feedbackId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidFeedback(request.resource.data) && request.resource.data.authorId == request.auth.uid;
+      allow update: if isSignedIn() && isValidFeedback(request.resource.data) && (
+        isAdmin() || 
+        (isOwner(resource.data.authorId) && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'description', 'category', 'imageUrl'])) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes', 'downvotes']))
+      );
+      allow delete: if isAdmin() || (isSignedIn() && isOwner(resource.data.authorId));
+
+      match /votes/{voteId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isOwner(voteId) && isValidVote(request.resource.data);
+        allow update: if isSignedIn() && isOwner(voteId) && isValidVote(request.resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['type', 'updatedAt']);
+        allow delete: if isSignedIn() && isOwner(voteId);
+      }
+      
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.keys().hasAll(['text', 'authorId', 'feedbackId', 'createdAt']) && request.resource.data.text is string && request.resource.data.text.size() <= 1000;
+        allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.authorId);
+      }
+    }
+
+    match /polls/{pollId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+
+      match /responses/{responseId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && isOwner(responseId);
+      }
+    }
+
+    match /priorityOptions/{optionId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and roles.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "role": { "type": "string", "enum": ["citizen", "official", "admin"] },
+        "displayName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "role"]
+    },
+    "Budget": {
+      "title": "Budget Item",
+      "description": "Structured budget data for departments and categories.",
+      "type": "object",
+      "properties": {
+        "department": { "type": "string" },
+        "category": { "type": "string" },
+        "subCategory": { "type": "string" },
+        "lineItem": { "type": "string" },
+        "amount": { "type": "number" },
+        "fiscalYear": { "type": "string" }
+      },
+      "required": ["department", "category", "lineItem", "amount", "fiscalYear"]
+    },
+    "Feedback": {
+      "title": "Citizen Feedback",
+      "description": "Feedback submitted by citizens regarding departments or categories.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "department": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "authorId": { "type": "string" },
+        "upvotes": { "type": "number" },
+        "downvotes": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "flagged", "moderated"] },
+        "moderationStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "moderatedBy": { "type": "string" },
+        "moderatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "description", "category", "authorId"]
+    },
+    "Vote": {
+      "title": "Vote",
+      "description": "Upvote or downvote on a feedback item.",
+      "type": "object",
+      "properties": {
+        "feedbackId": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["upvote", "downvote"] }
+      },
+      "required": ["feedbackId", "userId", "type"]
+    },
+    "Poll": {
+      "title": "Priority Poll",
+      "description": "Ranking of top 5 priorities by a citizen.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "priorities": { 
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "rankedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "priorities"]
+    },
+    "PriorityOption": {
+      "title": "Priority Option",
+      "description": "Available priorities for ranking in the poll.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "label"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and roles."
+    },
+    "/budgets/{budgetId}": {
+      "schema": "Budget",
+      "description": "Budget data items."
+    },
+    "/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Citizen feedback submissions."
+    },
+    "/feedback/{feedbackId}/votes/{voteId}": {
+      "schema": "Vote",
+      "description": "Votes on a specific feedback item."
+    },
+    "/polls/{pollId}": {
+      "schema": "Poll",
+      "description": "Priority poll rankings."
+    },
+    "/priorityOptions/{optionId}": {
+      "schema": "PriorityOption",
+      "description": "List of priorities users can rank."
+    }
+  }
+}
