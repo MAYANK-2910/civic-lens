@@ -3,7 +3,7 @@ flask-login==0.6.3
 flask-sqlalchemy==3.1.1
 flask-wtf==1.2.2
 flask-cors==5.0.1
-flask-limiter==3.12
+flask-limiter==3.11.0
 gunicorn==23.0.0
 python-dotenv==1.1.0
 bcrypt==4.3.0
