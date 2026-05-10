@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+{% block title %}Profile — Civic Lens{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6 pb-12">
+    <header class="border-b border-outline-variant/60 pb-6">
+        <h1 class="text-3xl font-extrabold tracking-tight text-on-surface">My Profile</h1>
+        <p class="text-sm text-on-surface-variant mt-1">Manage your account and civic identity.</p>
+    </header>
+
+    <div class="bg-surface-container rounded-2xl p-6 border border-outline-variant/50 shadow-sm flex flex-col md:flex-row items-start gap-6">
+        <div class="w-20 h-20 rounded-full bg-surface-container-high border-2 border-outline-variant flex items-center justify-center overflow-hidden shrink-0">
+            {% if current_user.photo_url %}
+            <img src="{{ current_user.photo_url }}" alt="Avatar" class="w-full h-full object-cover" referrerpolicy="no-referrer">
+            {% else %}
+            <i data-lucide="user" class="w-8 h-8 text-on-surface-variant"></i>
+            {% endif %}
+        </div>
+        <div class="flex-1">
+            <h2 class="text-xl font-bold text-on-surface">{{ current_user.display_name }}</h2>
+            <p class="text-sm text-on-surface-variant">{{ current_user.email or 'Guest User' }}</p>
+            <div class="flex flex-wrap gap-2 mt-3">
+                <span class="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-lg uppercase tracking-wider">{{ current_user.role }}</span>
+                <span class="px-3 py-1 bg-surface-variant text-outline text-xs font-bold rounded-lg uppercase tracking-wider">{{ current_user.provider }}</span>
+                {% if current_user.email_verified %}
+                <span class="px-3 py-1 bg-tertiary/10 text-tertiary text-xs font-bold rounded-lg uppercase tracking-wider flex items-center gap-1">
+                    <i data-lucide="check-circle" class="w-3 h-3"></i> Verified
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-surface-container rounded-2xl p-6 border border-outline-variant/50 shadow-sm">
+        <h3 class="text-lg font-bold text-on-surface mb-4">Civic Engagement Score</h3>
+        <div class="grid grid-cols-3 gap-4">
+            <div class="text-center p-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
+                <p class="text-2xl font-bold text-primary" id="my-posts">-</p>
+                <p class="text-xs text-outline font-semibold mt-1">Posts</p>
+            </div>
+            <div class="text-center p-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
+                <p class="text-2xl font-bold text-secondary" id="my-votes">-</p>
+                <p class="text-xs text-outline font-semibold mt-1">Votes</p>
+            </div>
+            <div class="text-center p-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
+                <p class="text-2xl font-bold text-tertiary" id="my-comments">-</p>
+                <p class="text-xs text-outline font-semibold mt-1">Comments</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-surface-container rounded-2xl p-6 border border-outline-variant/50 shadow-sm">
+        <h3 class="text-lg font-bold text-on-surface mb-4">Account Details</h3>
+        <div class="space-y-3 text-sm">
+            <div class="flex justify-between py-2 border-b border-outline-variant/30">
+                <span class="text-on-surface-variant font-medium">Member Since</span>
+                <span class="text-on-surface font-semibold">{{ current_user.created_at.strftime('%B %d, %Y') if current_user.created_at else 'N/A' }}</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-outline-variant/30">
+                <span class="text-on-surface-variant font-medium">Auth Provider</span>
+                <span class="text-on-surface font-semibold capitalize">{{ current_user.provider }}</span>
+            </div>
+            <div class="flex justify-between py-2">
+                <span class="text-on-surface-variant font-medium">User ID</span>
+                <span class="text-on-surface font-mono text-xs">{{ current_user.id[:16] }}...</span>
+            </div>
+        </div>
+    </div>
+
+    <a href="{{ url_for('auth.logout') }}" class="block w-full text-center py-3 bg-error/10 text-error border border-error/20 rounded-xl font-semibold text-sm hover:bg-error/20 transition-colors">Sign Out</a>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); });
+</script>
+{% endblock %}

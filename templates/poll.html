@@ -1,0 +1,75 @@
+{% extends "layout.html" %}
+{% block title %}Strategic Plan — Civic Lens{% endblock %}
+{% block content %}
+<div class="space-y-6 pb-12">
+    <header class="border-b border-outline-variant/60 pb-6">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="bg-tertiary/10 text-tertiary p-1.5 rounded-lg shadow-sm ring-1 ring-tertiary/20"><i data-lucide="vote" class="w-5 h-5"></i></span>
+            <span class="text-xs font-bold uppercase tracking-widest text-tertiary">Civic Governance</span>
+        </div>
+        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-on-surface">Community Priority Poll</h1>
+        <p class="text-sm text-on-surface-variant mt-2 font-medium">Drag and drop to rank what matters most to you.</p>
+    </header>
+
+    <div id="poll-app"></div>
+</div>
+
+<script>
+let pollData = null;
+document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadPoll(); });
+
+async function loadPoll() {
+    const res = await fetch('/api/polls/active'); pollData = await res.json();
+    const app = document.getElementById('poll-app');
+    if (!pollData) { app.innerHTML = '<div class="text-center py-16 text-on-surface-variant"><p class="text-lg font-semibold">No active polls at this time.</p></div>'; return; }
+
+    if (pollData.already_submitted) {
+        app.innerHTML = `<div class="bg-tertiary/10 border border-tertiary/30 rounded-2xl p-8 text-center space-y-3 animate-fade-in-up">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-tertiary/20 rounded-2xl mb-2"><i data-lucide="check-circle" class="w-8 h-8 text-tertiary"></i></div>
+            <h3 class="text-xl font-bold text-on-surface">Thanks for Your Vote!</h3>
+            <p class="text-on-surface-variant max-w-md mx-auto">Your ranking has been recorded. ${pollData.total_responses} citizens have participated so far.</p>
+        </div>`;
+        lucide.createIcons();
+        return;
+    }
+
+    let html = `<div class="bg-surface-container border border-outline-variant rounded-2xl p-6 shadow-sm mb-4">
+        <h2 class="text-lg font-bold text-on-surface mb-1">${pollData.title}</h2>
+        <p class="text-sm text-on-surface-variant">${pollData.description}</p>
+        <p class="text-xs text-outline mt-2">${pollData.total_responses} responses so far</p>
+    </div>`;
+    html += '<div id="poll-list" class="space-y-2">';
+    pollData.options.forEach((opt, i) => {
+        html += `<div class="poll-item bg-surface-container border border-outline-variant/50 rounded-xl p-4 flex items-center gap-4 cursor-grab active:cursor-grabbing hover:bg-surface-container-high transition-colors card-hover-lift" data-id="${opt.id}" draggable="true"
+            ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="drop(event)" ondragend="dragEnd(event)">
+            <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0 rank-num">${i+1}</div>
+            <div class="flex-1 min-w-0">
+                <h4 class="font-bold text-on-surface text-sm">${opt.label}</h4>
+                <p class="text-xs text-on-surface-variant mt-0.5">${opt.description}</p>
+            </div>
+            <span class="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-md bg-surface-variant text-outline shrink-0">${opt.category}</span>
+            <i data-lucide="grip-vertical" class="w-4 h-4 text-outline shrink-0"></i>
+        </div>`;
+    });
+    html += '</div>';
+    html += `<button onclick="submitPollRanking()" class="mt-6 w-full py-3 bg-primary text-on-primary rounded-xl font-bold text-sm hover:brightness-110 shadow-md btn-ripple btn-hover">Submit My Ranking</button>`;
+    app.innerHTML = html;
+    lucide.createIcons();
+}
+
+let dragEl = null;
+function dragStart(e) { dragEl = e.target.closest('.poll-item'); e.target.closest('.poll-item').classList.add('opacity-50'); }
+function dragOver(e) { e.preventDefault(); const target = e.target.closest('.poll-item'); if (target && target !== dragEl) { const list = document.getElementById('poll-list'); const items = [...list.children]; const dragIdx = items.indexOf(dragEl); const targetIdx = items.indexOf(target); if (dragIdx < targetIdx) target.after(dragEl); else target.before(dragEl); updateRankNumbers(); } }
+function drop(e) { e.preventDefault(); }
+function dragEnd(e) { e.target.closest('.poll-item')?.classList.remove('opacity-50'); updateRankNumbers(); }
+function updateRankNumbers() { document.querySelectorAll('.poll-item').forEach((el,i) => el.querySelector('.rank-num').textContent = i+1); }
+
+async function submitPollRanking() {
+    const items = document.querySelectorAll('.poll-item');
+    const ranking = [...items].map(el => el.dataset.id);
+    const res = await fetch(`/api/polls/${pollData.id}/respond`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ranking}) });
+    if (res.ok) loadPoll();
+    else alert('Error submitting. Please try again.');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,181 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard — Civic Lens{% endblock %}
+{% block content %}
+<div class="space-y-6 pb-12 stagger-children">
+    <!-- Welcome Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-surface-container/50 p-6 sm:p-8 rounded-2xl border border-outline-variant/50 backdrop-blur-sm relative overflow-hidden">
+        <div class="absolute right-0 top-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] pointer-events-none"></div>
+        <div class="relative z-10">
+            <div class="flex items-center gap-2 text-primary font-bold text-[10px] uppercase tracking-widest mb-2">
+                <i data-lucide="star" class="w-3 h-3"></i> Citizen Portal
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-on-surface leading-tight tracking-tight">
+                Welcome back, <span class="text-primary">{{ current_user.display_name.split(' ')[0] if current_user.display_name else 'Friend' }}</span>
+            </h1>
+            <p class="text-on-surface-variant max-w-xl mt-1.5 text-sm sm:text-base leading-relaxed">
+                Stay informed on your city's progress with real-time budget insights and governance updates.
+            </p>
+            <div class="flex flex-wrap items-center gap-3 mt-4">
+                <div class="flex items-center gap-1.5 text-[11px] font-semibold text-outline bg-surface-container-high px-2.5 py-1 rounded-md border border-outline-variant/30">
+                    <i data-lucide="map-pin" class="w-3 h-3"></i> NDMC
+                </div>
+                <div class="flex items-center gap-1.5 text-[11px] font-semibold text-outline bg-surface-container-high px-2.5 py-1 rounded-md border border-outline-variant/30">
+                    <i data-lucide="calendar" class="w-3 h-3"></i> FY 2023-24
+                </div>
+            </div>
+        </div>
+        <div class="flex gap-3 relative z-10 shrink-0">
+            <button onclick="exportDashboard()" class="flex items-center gap-1.5 px-4 py-2 bg-primary text-on-primary rounded-lg hover:brightness-110 shadow-md font-semibold text-sm btn-ripple btn-hover">
+                <i data-lucide="download" class="w-4 h-4"></i> <span>Export View</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Row -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6" id="kpi-row">
+        {% set stats = [
+            ('Total Budget (Approved)', '₹1,200 Cr', 'trending-up', '+4.2%', 'Projected Growth', 'text-primary'),
+            ('Citizen Feedbacks', '1,420', 'message-square', '+12%', 'Engagement Up', 'text-secondary'),
+            ('Active Polls', '5', 'filter', 'Ongoing', 'Strategy Shift', 'text-tertiary'),
+            ('Spend Utilization', '72%', 'users', 'Q3 Target', 'Within Margin', 'text-primary'),
+        ] %}
+        {% for label, value, icon, trend, sub, color in stats %}
+        <div class="bg-surface-container rounded-2xl p-6 border border-outline-variant/50 transition-shadow duration-300 group shadow-sm hover:shadow-lg cursor-default card-hover-lift">
+            <div class="flex justify-between items-start mb-4">
+                <div class="p-2.5 rounded-xl bg-surface-container-high border border-outline-variant/30 {{ color }} shadow-sm hover-scale">
+                    <i data-lucide="{{ icon }}" class="w-5 h-5"></i>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="text-[10px] font-bold text-primary px-1.5 py-0.5 bg-primary/10 rounded">{{ trend }}</span>
+                    <span class="text-[9px] text-outline mt-1 font-semibold uppercase">{{ sub }}</span>
+                </div>
+            </div>
+            <h3 class="text-outline font-bold text-[10px] uppercase tracking-widest">{{ label }}</h3>
+            <p class="text-2xl sm:text-3xl font-bold text-on-surface mt-1 tracking-tight">{{ value }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <div class="bg-surface-container rounded-2xl p-6 sm:p-8 border border-outline-variant/50 shadow-sm">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-bold tracking-tight text-on-surface">Departmental Allocation</h2>
+            </div>
+            <div class="h-64 sm:h-72"><canvas id="pieChart"></canvas></div>
+        </div>
+        <div class="bg-surface-container rounded-2xl p-6 sm:p-8 border border-outline-variant/50 shadow-sm">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-bold tracking-tight text-on-surface">Citizen Activity</h2>
+                <div class="flex gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-outline/20"></span>
+                </div>
+            </div>
+            <div class="h-64 sm:h-72"><canvas id="barChart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- High-Priority Concerns -->
+    <div class="bg-surface-container rounded-2xl p-6 sm:p-8 border border-outline-variant/50 shadow-sm">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-lg font-bold tracking-tight text-on-surface">High-Priority Concerns</h2>
+                <p class="text-[11px] text-outline font-semibold mt-0.5 uppercase tracking-wider">Trending Issues</p>
+            </div>
+            <a href="{{ url_for('main.feedback') }}" class="text-primary flex items-center gap-1.5 font-semibold text-xs border border-primary/20 bg-primary/5 px-3 py-1.5 rounded-md hover:bg-primary/10">
+                View All <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </a>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {% set concerns = [
+                ('Roads & Bridges', 'Potholes on MG Road after Monsoons', 124, 'Active', 'bg-secondary/10 text-secondary'),
+                ('Transport', 'Bus Delayed Frequency Route 42', 89, 'Reviewed', 'bg-tertiary/10 text-tertiary'),
+                ('Solid Waste', 'Garbage not collected in Ward 12', 67, 'Active', 'bg-primary/10 text-primary'),
+            ] %}
+            {% for tag, title, votes, status, color in concerns %}
+            <div class="flex flex-col p-5 bg-surface-container-low rounded-xl border border-outline-variant/50 hover:border-outline/50 group relative overflow-hidden cursor-pointer card-hover-lift">
+                <div class="absolute top-0 right-0 w-20 h-20 bg-primary/5 rounded-full blur-xl group-hover:scale-150 transition-transform duration-500"></div>
+                <div class="flex justify-between items-center mb-3 relative z-10">
+                    <span class="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-md {{ color }}">{{ tag }}</span>
+                    <div class="flex items-center gap-1 text-on-surface font-semibold text-xs">
+                        <i data-lucide="trending-up" class="w-3 h-3 text-secondary"></i> {{ votes }}
+                    </div>
+                </div>
+                <h4 class="font-semibold text-on-surface text-sm leading-snug mb-4 relative z-10">{{ title }}</h4>
+                <div class="flex items-center justify-between mt-auto pt-3 border-t border-outline-variant/30 relative z-10">
+                    <span class="text-[10px] text-outline font-medium">{{ status }}</span>
+                    <div class="flex -space-x-1.5">
+                        {% for j in range(1, 4) %}
+                        <div class="h-5 w-5 rounded-full border border-surface-container bg-surface-variant flex items-center justify-center text-[7px] font-bold text-on-surface-variant">U{{ j }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    lucide.createIcons();
+    // Pie Chart
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#a1a1aa' : '#52525b';
+    new Chart(document.getElementById('pieChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Municipal Schools', 'Public Safety', 'Roads & Bridges', 'Health Centers', 'Solid Waste'],
+            datasets: [{
+                data: [4500, 3000, 2500, 1500, 500],
+                backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                borderWidth: 0, hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: { legend: { position: 'bottom', labels: { color: textColor, font: { size: 12 }, padding: 16, usePointStyle: true, pointStyleWidth: 8 } } }
+        }
+    });
+    // Bar Chart
+    new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+            datasets: [{
+                label: 'Feedbacks', data: [120, 210, 450, 320, 540],
+                backgroundColor: isDark ? '#ffffff' : '#000000',
+                borderRadius: 6, maxBarThickness: 32
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } },
+                y: { grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, ticks: { color: textColor, font: { size: 10 } } }
+            }
+        }
+    });
+});
+
+function exportDashboard() {
+    const lines = [
+        'CIVIC LENS - DASHBOARD REPORT',
+        'Generated: ' + new Date().toLocaleDateString(),
+        '', '--- OVERVIEW ---',
+        'Total Budget: ₹1,200 Cr', 'Citizen Feedbacks: 1,420', 'Active Polls: 5', 'Utilization: 72%',
+        '', '--- DEPARTMENTS ---',
+        'Department,Amount (Cr)',
+        'Municipal Schools,4500', 'Public Safety,3000', 'Roads & Bridges,2500', 'Health Centers,1500', 'Solid Waste,500'
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'dashboard_export_' + new Date().toISOString().split('T')[0] + '.csv';
+    a.click();
+}
+</script>
+{% endblock %}

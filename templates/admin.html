@@ -1,0 +1,113 @@
+{% extends "layout.html" %}
+{% block title %}Admin Panel — Civic Lens{% endblock %}
+{% block content %}
+<div class="space-y-6 pb-12">
+    <header class="border-b border-outline-variant/60 pb-6">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="bg-error/10 text-error p-1.5 rounded-lg shadow-sm ring-1 ring-error/20"><i data-lucide="shield-check" class="w-5 h-5"></i></span>
+            <span class="text-xs font-bold uppercase tracking-widest text-error">Administrator</span>
+        </div>
+        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-on-surface">Control Center</h1>
+        <p class="text-sm text-on-surface-variant mt-2 font-medium">Manage budget data, moderate feedback, and oversee users.</p>
+    </header>
+
+    <!-- Admin Tabs -->
+    <div class="flex bg-surface-container p-1 rounded-xl shadow-inner border border-outline-variant/40 w-fit">
+        <button onclick="setAdminTab('upload')" id="admin-tab-upload" class="admin-tab active bg-surface-bright text-primary shadow px-4 py-2 text-sm font-semibold rounded-lg">Budget Upload</button>
+        <button onclick="setAdminTab('moderate')" id="admin-tab-moderate" class="admin-tab px-4 py-2 text-sm font-semibold rounded-lg text-on-surface-variant">Moderation</button>
+        <button onclick="setAdminTab('users')" id="admin-tab-users" class="admin-tab px-4 py-2 text-sm font-semibold rounded-lg text-on-surface-variant">Users</button>
+    </div>
+
+    <!-- Upload Panel -->
+    <div id="admin-upload" class="bg-surface-container rounded-2xl p-6 border border-outline-variant/50 shadow-sm">
+        <h3 class="font-bold text-on-surface text-lg mb-4">Upload Budget CSV</h3>
+        <p class="text-sm text-on-surface-variant mb-4">CSV should include: department, category, amount, fiscal_year, type (Revenue/Expenditure)</p>
+        <form id="csv-form" class="flex flex-col sm:flex-row items-start gap-3">
+            <input type="file" id="csv-file" accept=".csv" class="flex-1 bg-surface-container-highest border border-outline-variant rounded-lg px-4 py-2 text-sm text-on-surface">
+            <button type="button" onclick="uploadCSV()" class="px-6 py-2.5 bg-primary text-on-primary rounded-lg font-semibold text-sm hover:brightness-110 shadow-sm">Upload</button>
+        </form>
+        <div id="upload-result" class="mt-4"></div>
+    </div>
+
+    <!-- Moderation Panel -->
+    <div id="admin-moderate" class="hidden bg-surface-container rounded-2xl p-6 border border-outline-variant/50 shadow-sm">
+        <h3 class="font-bold text-on-surface text-lg mb-4">Feedback Moderation</h3>
+        <div id="mod-list" class="space-y-3"></div>
+    </div>
+
+    <!-- Users Panel -->
+    <div id="admin-users" class="hidden bg-surface-container rounded-2xl p-6 border border-outline-variant/50 shadow-sm">
+        <h3 class="font-bold text-on-surface text-lg mb-4">Registered Users</h3>
+        <div id="users-list" class="space-y-2"></div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); });
+
+function setAdminTab(t) {
+    document.querySelectorAll('.admin-tab').forEach(b => { b.classList.remove('active','bg-surface-bright','text-primary','shadow'); b.classList.add('text-on-surface-variant'); });
+    document.getElementById('admin-tab-'+t).classList.add('active','bg-surface-bright','text-primary','shadow');
+    document.getElementById('admin-tab-'+t).classList.remove('text-on-surface-variant');
+    ['upload','moderate','users'].forEach(p => document.getElementById('admin-'+p).classList.toggle('hidden', p!==t));
+    if (t==='moderate') loadModeration();
+    if (t==='users') loadUsers();
+}
+
+async function uploadCSV() {
+    const file = document.getElementById('csv-file').files[0];
+    if (!file) return alert('Select a CSV file.');
+    const fd = new FormData(); fd.append('file', file);
+    const res = await fetch('/api/budgets/upload', { method:'POST', body:fd });
+    const data = await res.json();
+    document.getElementById('upload-result').innerHTML = res.ok
+        ? `<p class="text-tertiary font-semibold text-sm">${data.message}</p>`
+        : `<p class="text-error font-semibold text-sm">${data.error}</p>`;
+}
+
+async function loadModeration() {
+    const res = await fetch('/api/admin/feedback'); const data = await res.json();
+    const list = document.getElementById('mod-list');
+    if (!data.length) { list.innerHTML = '<p class="text-on-surface-variant text-sm py-4">No feedback to moderate.</p>'; return; }
+    list.innerHTML = data.map(fb => `
+        <div class="bg-surface-container-low rounded-xl p-4 border border-outline-variant/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-md bg-primary/10 text-primary">${fb.category}</span>
+                    <span class="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-md ${fb.status==='active'?'bg-tertiary/10 text-tertiary':'bg-error/10 text-error'}">${fb.status}</span>
+                </div>
+                <h4 class="font-bold text-sm text-on-surface">${fb.title}</h4>
+                <p class="text-xs text-on-surface-variant truncate">${fb.description}</p>
+            </div>
+            <div class="flex gap-2 shrink-0">
+                <button onclick="moderate('${fb.id}','approved')" class="px-3 py-1.5 bg-tertiary/10 text-tertiary text-xs font-bold rounded-lg hover:bg-tertiary/20">Approve</button>
+                <button onclick="moderate('${fb.id}','rejected')" class="px-3 py-1.5 bg-error/10 text-error text-xs font-bold rounded-lg hover:bg-error/20">Reject</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function moderate(id, status) {
+    await fetch(`/api/feedback/${id}/moderate`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status}) });
+    loadModeration();
+}
+
+async function loadUsers() {
+    const res = await fetch('/api/admin/users'); const data = await res.json();
+    const list = document.getElementById('users-list');
+    list.innerHTML = data.map(u => `
+        <div class="bg-surface-container-low rounded-xl p-4 border border-outline-variant/30 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center border border-outline-variant/50 overflow-hidden shrink-0">
+                ${u.photo_url ? `<img src="${u.photo_url}" class="w-full h-full object-cover" referrerpolicy="no-referrer">` : '<i data-lucide="user" class="w-4 h-4 text-on-surface-variant"></i>'}
+            </div>
+            <div class="flex-1 min-w-0">
+                <h4 class="font-bold text-sm text-on-surface">${u.display_name}</h4>
+                <p class="text-xs text-on-surface-variant truncate">${u.email || 'Anonymous'}</p>
+            </div>
+            <span class="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-md bg-primary/10 text-primary shrink-0">${u.role}</span>
+        </div>
+    `).join('');
+    lucide.createIcons();
+}
+</script>
+{% endblock %}

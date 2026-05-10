@@ -1,0 +1,142 @@
+{% extends "layout.html" %}
+{% block title %}Citizens Voice — Civic Lens{% endblock %}
+{% block content %}
+<div class="space-y-6 pb-12">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-outline-variant/60 pb-6">
+        <div>
+            <div class="flex items-center gap-2 mb-2">
+                <span class="bg-secondary/10 text-secondary p-1.5 rounded-lg shadow-sm ring-1 ring-secondary/20"><i data-lucide="message-square" class="w-5 h-5"></i></span>
+                <span class="text-xs font-bold uppercase tracking-widest text-secondary">Community Forum</span>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-on-surface">Citizens Voice</h1>
+            <p class="text-sm text-on-surface-variant mt-2 font-medium">Voice your ideas, report issues, and vote on civic priorities.</p>
+        </div>
+        <button onclick="togglePostForm()" class="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl font-semibold text-sm shadow-md hover:brightness-110 btn-ripple btn-hover">
+            <i data-lucide="plus" class="w-4 h-4"></i> New Post
+        </button>
+    </header>
+
+    <!-- Post Form -->
+    <div id="post-form" class="hidden bg-surface-container border border-outline-variant rounded-2xl p-6 shadow-md animate-fade-in-up">
+        <h3 class="font-bold text-on-surface text-lg mb-4">Share Your Feedback</h3>
+        <div class="space-y-3">
+            <input id="fb-title" type="text" placeholder="Title..." maxlength="200" class="w-full bg-surface-container-highest border border-outline-variant rounded-lg px-4 py-2 text-sm text-on-surface">
+            <textarea id="fb-desc" rows="3" placeholder="Describe your concern or idea..." class="w-full bg-surface-container-highest border border-outline-variant rounded-lg px-4 py-2 text-sm text-on-surface resize-none"></textarea>
+            <div class="flex items-center gap-3">
+                <select id="fb-cat" class="bg-surface-container-highest border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface">
+                    <option>Infrastructure</option><option>Transport</option><option>Sanitation</option><option>Education</option><option>Safety</option><option>Health</option><option>Other</option>
+                </select>
+                <button onclick="submitFeedback()" class="ml-auto px-5 py-2 bg-primary text-on-primary rounded-lg font-semibold text-sm hover:brightness-110">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feed -->
+    <div id="feedback-feed" class="space-y-4"></div>
+</div>
+
+<!-- Comment Modal -->
+<div id="comment-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onclick="if(event.target===this)closeComments()">
+    <div class="bg-surface-container w-full max-w-lg rounded-2xl border border-outline-variant shadow-2xl overflow-hidden animate-fade-in-up max-h-[80vh] flex flex-col">
+        <div class="p-5 border-b border-outline-variant/30 flex justify-between items-center">
+            <h3 class="font-bold text-on-surface text-lg">Comments</h3>
+            <button onclick="closeComments()" class="text-outline hover:text-on-surface"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div id="comments-list" class="flex-1 overflow-y-auto p-5 space-y-3 min-h-[100px]"></div>
+        <div class="p-4 border-t border-outline-variant/30 flex gap-2">
+            <input id="comment-input" type="text" placeholder="Write a comment..." class="flex-1 bg-surface-container-highest border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface" onkeydown="if(event.key==='Enter')postComment()">
+            <button onclick="postComment()" class="px-4 py-2 bg-primary text-on-primary rounded-lg font-semibold text-sm hover:brightness-110">Send</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let activeFeedbackId = null;
+document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadFeed(); });
+
+function togglePostForm() { document.getElementById('post-form').classList.toggle('hidden'); }
+
+async function loadFeed() {
+    const res = await fetch('/api/feedback'); const data = await res.json();
+    const feed = document.getElementById('feedback-feed');
+    if (!data.length) { feed.innerHTML = '<p class="text-center text-on-surface-variant py-12">No feedback yet. Be the first to share!</p>'; return; }
+    feed.innerHTML = data.map(fb => {
+        const date = new Date(fb.created_at).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'});
+        return `<div class="bg-surface-container border border-outline-variant/50 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow card-hover-lift">
+            <div class="flex items-start justify-between mb-3">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md bg-primary/10 text-primary">${fb.category}</span>
+                    <h3 class="text-base font-bold text-on-surface mt-2 leading-snug">${fb.title}</h3>
+                </div>
+                <span class="text-[10px] text-outline font-medium shrink-0">${date}</span>
+            </div>
+            <p class="text-sm text-on-surface-variant leading-relaxed mb-4">${fb.description}</p>
+            <div class="flex items-center gap-4 pt-3 border-t border-outline-variant/30">
+                <button onclick="vote('${fb.id}','upvote')" class="flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-tertiary transition-colors group">
+                    <i data-lucide="thumbs-up" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+                    <span id="up-${fb.id}">${fb.upvotes}</span>
+                </button>
+                <button onclick="vote('${fb.id}','downvote')" class="flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-error transition-colors group">
+                    <i data-lucide="thumbs-down" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+                    <span id="down-${fb.id}">${fb.downvotes}</span>
+                </button>
+                <button onclick="openComments('${fb.id}')" class="flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors ml-auto group">
+                    <i data-lucide="message-circle" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+                    Comments
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+    lucide.createIcons();
+}
+
+async function submitFeedback() {
+    const title = document.getElementById('fb-title').value.trim();
+    const desc = document.getElementById('fb-desc').value.trim();
+    const cat = document.getElementById('fb-cat').value;
+    if (!title || !desc) return alert('Title and description required.');
+    await fetch('/api/feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title,description:desc,category:cat}) });
+    document.getElementById('fb-title').value = '';
+    document.getElementById('fb-desc').value = '';
+    document.getElementById('post-form').classList.add('hidden');
+    loadFeed();
+}
+
+async function vote(id, type) {
+    const res = await fetch(`/api/feedback/${id}/vote`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type}) });
+    const data = await res.json();
+    document.getElementById('up-'+id).textContent = data.upvotes;
+    document.getElementById('down-'+id).textContent = data.downvotes;
+}
+
+async function openComments(fbId) {
+    activeFeedbackId = fbId;
+    document.getElementById('comment-modal').classList.remove('hidden');
+    const res = await fetch(`/api/feedback/${fbId}/comments`); const data = await res.json();
+    const list = document.getElementById('comments-list');
+    if (!data.length) { list.innerHTML = '<p class="text-center text-on-surface-variant text-sm py-4">No comments yet.</p>'; }
+    else {
+        list.innerHTML = data.map(c => `
+            <div class="bg-surface-container-low rounded-lg p-3 border border-outline-variant/30">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs font-bold text-on-surface">${c.author_name}</span>
+                    <span class="text-[9px] text-outline">${new Date(c.created_at).toLocaleString()}</span>
+                </div>
+                <p class="text-sm text-on-surface-variant">${c.text}</p>
+            </div>`).join('');
+    }
+    lucide.createIcons();
+}
+
+function closeComments() { document.getElementById('comment-modal').classList.add('hidden'); activeFeedbackId = null; }
+
+async function postComment() {
+    const input = document.getElementById('comment-input');
+    const text = input.value.trim();
+    if (!text || !activeFeedbackId) return;
+    await fetch(`/api/feedback/${activeFeedbackId}/comments`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text}) });
+    input.value = '';
+    openComments(activeFeedbackId);
+}
+</script>
+{% endblock %}

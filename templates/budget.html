@@ -1,0 +1,233 @@
+{% extends "layout.html" %}
+{% block title %}Budget Explorer — Civic Lens{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6" id="budget-app">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-outline-variant/60 pb-6">
+        <div>
+            <div class="flex items-center gap-2 mb-2">
+                <span class="bg-primary/10 text-primary p-1.5 rounded-lg shadow-sm ring-1 ring-primary/20"><i data-lucide="landmark" class="w-5 h-5"></i></span>
+                <span class="text-xs font-bold uppercase tracking-widest text-primary">Municipal Open Data</span>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-on-surface">Financial Transparency Portal</h1>
+            <p class="text-sm md:text-base text-on-surface-variant mt-2 max-w-2xl font-medium">Track where your municipal taxes go.</p>
+        </div>
+        <div class="flex flex-col gap-3 w-full md:w-auto">
+            <div class="flex bg-surface-container p-1 rounded-xl shadow-inner border border-outline-variant/40">
+                <button onclick="setTab('overview')" id="tab-overview" class="tab-btn active px-4 py-2 text-sm font-semibold rounded-lg capitalize">Overview</button>
+                <button onclick="setTab('trends')" id="tab-trends" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg capitalize">Trends</button>
+                <button onclick="setTab('ledger')" id="tab-ledger" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg capitalize">Ledger</button>
+            </div>
+            <select id="year-select" onchange="loadData()" class="w-full md:w-auto bg-surface border border-outline-variant text-on-surface text-sm font-bold rounded-lg px-4 py-2.5 shadow-sm cursor-pointer"></select>
+        </div>
+    </header>
+
+    <!-- KPI Row -->
+    <div id="kpi-section" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+
+    <!-- AI Insight -->
+    <div id="ai-section" class="hidden bg-[#f0f4ff] dark:bg-[#1e293b] border border-blue-200 dark:border-blue-900/50 rounded-2xl p-5 lg:p-6 shadow-sm flex flex-col md:flex-row gap-5 items-start">
+        <div class="bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 p-3 rounded-xl shrink-0">
+            <i data-lucide="user-square-2" class="w-6 h-6"></i>
+        </div>
+        <div class="flex-1 w-full">
+            <h4 class="text-sm font-bold text-blue-900 dark:text-blue-100 uppercase tracking-widest mb-2 flex items-center justify-between">
+                AI Independent Auditor
+                <button id="ai-btn" onclick="requestAIInsight()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg shadow-sm">Request Report</button>
+            </h4>
+            <div id="ai-content"><p class="text-blue-600/70 dark:text-blue-400/70 text-sm italic">Generate an independent AI analysis for fiscal performance review.</p></div>
+        </div>
+    </div>
+
+    <!-- Content Panels -->
+    <div id="overview-panel"></div>
+    <div id="trends-panel" class="hidden"></div>
+    <div id="ledger-panel" class="hidden"></div>
+</div>
+
+<script>
+let budgetData = [], currentTab = 'overview', currentYear = '2024-2025';
+const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f43f5e'];
+const fmt = v => '₹' + v.toLocaleString('en-IN') + ' Cr';
+
+document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); initBudget(); });
+
+async function initBudget() {
+    const yRes = await fetch('/api/budgets/years'); const years = await yRes.json();
+    const sel = document.getElementById('year-select');
+    sel.innerHTML = years.map(y => `<option value="${y}">FY ${y}</option>`).join('');
+    if (years.length) { currentYear = years[0]; sel.value = currentYear; }
+    await loadData();
+}
+
+async function loadData() {
+    currentYear = document.getElementById('year-select').value;
+    const res = await fetch('/api/budgets?fiscal_year=' + currentYear);
+    budgetData = await res.json();
+    renderAll();
+}
+
+function setTab(t) {
+    currentTab = t;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active','bg-surface-bright','text-primary','shadow','border','border-outline-variant/40'));
+    document.getElementById('tab-'+t).classList.add('active','bg-surface-bright','text-primary','shadow','border','border-outline-variant/40');
+    ['overview','trends','ledger'].forEach(p => document.getElementById(p+'-panel').classList.toggle('hidden', p!==t));
+    document.getElementById('kpi-section').classList.toggle('hidden', t==='trends');
+    document.getElementById('ai-section').classList.toggle('hidden', t!=='overview');
+    if (t==='trends') renderTrends();
+    if (t==='ledger') renderLedger();
+}
+
+function renderAll() {
+    const rev = budgetData.filter(b=>b.transaction_type==='Revenue');
+    const exp = budgetData.filter(b=>b.transaction_type==='Expenditure');
+    const tRev = rev.reduce((s,b)=>s+b.amount,0), tExp = exp.reduce((s,b)=>s+b.amount,0), net=tRev-tExp;
+
+    // KPI
+    document.getElementById('kpi-section').innerHTML = `
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 shadow-sm relative overflow-hidden group card-hover">
+            <p class="text-xs font-bold text-outline-variant mb-1 uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="arrow-down-right" class="w-4 h-4 text-tertiary"></i> Total Revenue</p>
+            <h3 class="text-3xl font-extrabold text-on-surface mb-1">${fmt(tRev)}</h3>
+            <p class="text-xs font-medium text-tertiary">From taxes, grants, and charges</p>
+        </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 shadow-sm relative overflow-hidden group card-hover">
+            <p class="text-xs font-bold text-outline-variant mb-1 uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="arrow-up-right" class="w-4 h-4 text-error"></i> Total Expenditure</p>
+            <h3 class="text-3xl font-extrabold text-on-surface mb-1">${fmt(tExp)}</h3>
+            <p class="text-xs font-medium text-error">Spent on public infra & services</p>
+        </div>
+        <div class="border rounded-2xl p-5 shadow-sm ${net>=0?'bg-tertiary-container/30 border-tertiary/20':'bg-error/10 border-error/20'}">
+            <p class="text-xs font-bold mb-1 uppercase tracking-wider flex items-center gap-1.5 ${net>=0?'text-tertiary':'text-error'}"><i data-lucide="activity" class="w-4 h-4"></i> Fiscal Balance</p>
+            <h3 class="text-3xl font-extrabold mb-1 ${net>=0?'text-tertiary':'text-error'}">${net>0?'+':''}${fmt(net)}</h3>
+            <p class="text-xs font-medium ${net>=0?'text-tertiary':'text-error'}">${net>=0?'Surplus':'Deficit'}</p>
+        </div>`;
+    lucide.createIcons();
+
+    // Overview
+    const revSorted = rev.sort((a,b)=>b.amount-a.amount);
+    const expSorted = exp.sort((a,b)=>b.amount-a.amount);
+    let ovHtml = '<div class="flex flex-col gap-6 w-full">';
+    ovHtml += '<div class="bg-surface-container-lowest border border-outline-variant rounded-3xl p-6 lg:p-8 shadow-sm flex flex-col xl:flex-row gap-8">';
+    ovHtml += '<div class="flex-1"><h3 class="text-xl font-bold text-on-surface mb-1 flex items-center gap-2"><i data-lucide="arrow-down-right" class="w-6 h-6 text-tertiary"></i> Where Money Comes From</h3>';
+    ovHtml += '<p class="text-sm text-on-surface-variant font-medium mb-6">Revenue breakdown for ' + currentYear + '</p><div class="flex flex-col gap-4">';
+    revSorted.forEach((item,i) => {
+        const pct = tRev>0 ? ((item.amount/tRev)*100).toFixed(1) : 0;
+        ovHtml += `<div class="bg-surface-container/50 p-4 rounded-2xl border border-outline-variant/30"><div class="flex justify-between items-center mb-2"><div class="flex items-center gap-3"><span class="w-3 h-3 rounded-full shrink-0" style="background:${COLORS[i%COLORS.length]}"></span><span class="font-bold text-sm text-on-surface">${item.category}</span></div><div class="text-right flex items-center gap-2"><span class="font-mono text-sm font-bold text-on-surface">${fmt(item.amount)}</span><span class="text-xs text-on-surface-variant font-bold bg-surface-variant px-1.5 py-0.5 rounded w-12 text-center">${pct}%</span></div></div><div class="w-full bg-surface-variant rounded-full h-1.5 overflow-hidden"><div class="h-full rounded-full" style="width:${pct}%;background:${COLORS[i%COLORS.length]};transition:width 1s"></div></div></div>`;
+    });
+    ovHtml += '</div></div>';
+    ovHtml += '<div class="xl:w-[400px] flex flex-col items-center justify-center bg-surface-container-low/30 rounded-3xl border border-outline-variant/50 p-6 min-h-[300px]"><canvas id="revPieChart" class="w-full h-[280px]"></canvas></div></div>';
+
+    // Expenditure
+    ovHtml += '<div class="bg-surface-container-lowest border border-outline-variant rounded-3xl p-6 lg:p-8 shadow-sm"><h3 class="text-xl font-bold text-on-surface mb-1 flex items-center gap-2"><i data-lucide="arrow-up-right" class="w-6 h-6 text-error"></i> Where Money Goes</h3>';
+    ovHtml += '<p class="text-sm text-on-surface-variant font-medium mb-6">Expenditure allocation</p><div class="flex flex-col gap-4">';
+    expSorted.forEach((item,i) => {
+        const pct = tExp>0 ? ((item.amount/tExp)*100).toFixed(1) : 0;
+        ovHtml += `<div class="bg-surface-container/50 p-4 rounded-2xl border border-outline-variant/30 flex items-center gap-4"><div class="w-12 h-12 rounded-xl flex items-center justify-center bg-surface shrink-0 border border-outline-variant/50"><span class="text-lg font-bold" style="color:${COLORS[i%COLORS.length]}">${i+1}</span></div><div class="flex-1 min-w-0"><div class="flex justify-between items-center mb-1"><span class="font-bold text-sm text-on-surface truncate pr-2">${item.category}</span><span class="font-mono text-sm font-bold text-on-surface shrink-0">${fmt(item.amount)}</span></div><div class="flex items-center gap-3"><div class="flex-1 bg-surface-variant rounded-full h-1.5 overflow-hidden"><div class="h-full rounded-full" style="width:${pct}%;background:${COLORS[i%COLORS.length]};transition:width 1s"></div></div><span class="text-xs text-on-surface-variant font-bold w-10 text-right">${pct}%</span></div></div></div>`;
+    });
+    ovHtml += '</div></div></div>';
+    document.getElementById('overview-panel').innerHTML = ovHtml;
+    lucide.createIcons();
+
+    // Mini pie chart for revenue
+    const revCanvas = document.getElementById('revPieChart');
+    if (revCanvas) {
+        const isDark = document.documentElement.classList.contains('dark');
+        new Chart(revCanvas, {
+            type:'doughnut', data: { labels: revSorted.map(r=>r.category), datasets:[{data:revSorted.map(r=>r.amount),backgroundColor:COLORS.slice(0,revSorted.length),borderWidth:0}] },
+            options: { responsive:true, maintainAspectRatio:false, cutout:'60%', plugins:{legend:{display:false}} }
+        });
+    }
+    document.getElementById('ai-section').classList.toggle('hidden', currentTab!=='overview');
+}
+
+async function renderTrends() {
+    const res = await fetch('/api/budgets'); const all = await res.json();
+    const years = [...new Set(all.map(b=>b.fiscal_year))].sort();
+    const tData = years.map(y => {
+        const yData = all.filter(b=>b.fiscal_year===y);
+        return { year:y, rev: yData.filter(b=>b.transaction_type==='Revenue').reduce((s,b)=>s+b.amount,0), exp: yData.filter(b=>b.transaction_type==='Expenditure').reduce((s,b)=>s+b.amount,0) };
+    });
+    document.getElementById('trends-panel').innerHTML = `
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-3xl p-6 shadow-sm">
+            <h3 class="text-lg font-bold text-on-surface mb-1 flex items-center gap-2"><i data-lucide="trending-up" class="w-5 h-5 text-primary"></i> Multi-Year Fiscal Trajectory</h3>
+            <p class="text-xs text-on-surface-variant font-medium mb-4">Tracking income vs expenditure over a decade</p>
+            <div class="h-[400px]"><canvas id="trendChart"></canvas></div>
+        </div>`;
+    lucide.createIcons();
+    const isDark = document.documentElement.classList.contains('dark');
+    new Chart(document.getElementById('trendChart'), {
+        type:'line', data: {
+            labels: tData.map(d=>d.year),
+            datasets: [
+                { label:'Revenue', data:tData.map(d=>d.rev), borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.1)', fill:true, tension:0.3, borderWidth:3 },
+                { label:'Expenditure', data:tData.map(d=>d.exp), borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,0.1)', fill:true, tension:0.3, borderWidth:3 }
+            ]
+        },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:isDark?'#a1a1aa':'#52525b',usePointStyle:true}}}, scales:{x:{grid:{display:false},ticks:{color:isDark?'#a1a1aa':'#52525b'}},y:{grid:{color:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'},ticks:{color:isDark?'#a1a1aa':'#52525b',callback:v=>fmt(v)}}} }
+    });
+}
+
+function renderLedger() {
+    const data = budgetData;
+    let html = `<div class="bg-surface-container-lowest border border-outline-variant rounded-3xl overflow-hidden shadow-sm flex flex-col">
+        <div class="p-6 border-b border-outline-variant/60 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface/50">
+            <div><h3 class="text-lg font-bold text-on-surface mb-1 flex items-center gap-2"><i data-lucide="file-text" class="w-5 h-5 text-secondary"></i> Detailed Ledger</h3></div>
+            <input id="ledger-search" oninput="filterLedger()" type="text" placeholder="Search ledger..." class="pl-4 pr-4 py-2 w-full md:w-64 bg-surface text-on-surface border border-outline-variant rounded-lg text-sm">
+        </div>
+        <div class="overflow-x-auto w-full max-h-[600px] overflow-y-auto"><table class="w-full text-left border-collapse min-w-[700px]">
+        <thead class="bg-surface-container border-b border-outline-variant/50 sticky top-0 z-10"><tr>
+            <th class="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest w-24">ID</th>
+            <th class="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest w-32">Year</th>
+            <th class="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest w-32">Type</th>
+            <th class="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Category</th>
+            <th class="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right w-32">Amount</th>
+        </tr></thead><tbody id="ledger-body" class="divide-y divide-outline-variant/30">`;
+    data.forEach(tx => {
+        const isRev = tx.transaction_type === 'Revenue';
+        html += `<tr class="hover:bg-surface-container-low transition-colors ledger-row" data-search="${(tx.category+' '+tx.description).toLowerCase()}">
+            <td class="p-4 text-xs font-mono text-outline-variant">${tx.id}</td>
+            <td class="p-4 text-sm font-medium text-on-surface">${tx.fiscal_year}</td>
+            <td class="p-4"><span class="px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded-lg border ${isRev?'bg-tertiary/10 text-tertiary border-tertiary/20':'bg-error/10 text-error border-error/20'}">${tx.transaction_type}</span></td>
+            <td class="p-4"><p class="text-sm font-bold text-on-surface">${tx.category}</p></td>
+            <td class="p-4 text-sm font-bold text-right font-mono ${isRev?'text-tertiary':'text-on-surface'}">${fmt(tx.amount)}</td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+    html += `<div class="p-4 bg-surface-container border-t border-outline-variant/60 flex items-center justify-between text-xs font-medium text-on-surface-variant">
+        <span>${data.length} records</span>
+        <button onclick="exportCSV()" class="flex items-center gap-1.5 text-secondary hover:underline"><i data-lucide="download" class="w-4 h-4"></i> Export CSV</button>
+    </div></div>`;
+    document.getElementById('ledger-panel').innerHTML = html;
+    lucide.createIcons();
+}
+
+function filterLedger() {
+    const q = document.getElementById('ledger-search').value.toLowerCase();
+    document.querySelectorAll('.ledger-row').forEach(r => {
+        r.style.display = r.dataset.search.includes(q) ? '' : 'none';
+    });
+}
+
+function exportCSV() { window.location = '/api/budgets/export?fiscal_year=' + currentYear; }
+
+async function requestAIInsight() {
+    const btn = document.getElementById('ai-btn');
+    const content = document.getElementById('ai-content');
+    btn.style.display = 'none';
+    content.innerHTML = '<div class="animate-pulse flex flex-col gap-2"><div class="h-4 bg-blue-200/50 dark:bg-blue-800/50 rounded w-full"></div><div class="h-4 bg-blue-200/50 dark:bg-blue-800/50 rounded w-5/6"></div></div>';
+    try {
+        const rev = budgetData.filter(b=>b.transaction_type==='Revenue');
+        const exp = budgetData.filter(b=>b.transaction_type==='Expenditure');
+        const tRev = rev.reduce((s,b)=>s+b.amount,0), tExp = exp.reduce((s,b)=>s+b.amount,0);
+        const topRev = rev.sort((a,b)=>b.amount-a.amount).slice(0,2).map(r=>r.category+' (₹'+r.amount+'Cr)').join(', ');
+        const topExp = exp.sort((a,b)=>b.amount-a.amount).slice(0,2).map(r=>r.category+' (₹'+r.amount+'Cr)').join(', ');
+        const res = await fetch('/api/budgets/ai-insight', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({fiscal_year:currentYear,total_revenue:tRev,total_expenditure:tExp,net:tRev-tExp,top_revenues:topRev,top_expenditures:topExp})
+        });
+        const data = await res.json();
+        content.innerHTML = `<p class="text-blue-800 dark:text-blue-200 text-sm leading-relaxed font-medium">${data.insight}</p>`;
+    } catch(e) {
+        content.innerHTML = '<p class="text-blue-600/70 text-sm italic">Unable to generate insight at this time.</p>';
+    }
+}
+</script>
+{% endblock %}
