@@ -66,6 +66,13 @@ def create_app(config_name=None):
 
     # Create database tables
     with app.app_context():
+        # Ensure database directory exists if using sqlite
+        db_uri = app.config['SQLALCHEMY_DATABASE_URI']
+        if db_uri.startswith('sqlite:///'):
+            db_path = db_uri.replace('sqlite:///', '')
+            if db_path and os.path.dirname(db_path):
+                os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+                
         from app import models  # noqa: F401
         db.create_all()
 
