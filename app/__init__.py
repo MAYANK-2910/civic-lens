@@ -34,7 +34,18 @@ def create_app(config_name=None):
 
     # Configuration
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'civic-lens-secret-key-change-in-production')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///civic_lens.db')
+    
+    # Handle SQLite absolute paths and ensure the directory exists
+    db_uri = os.getenv('DATABASE_URL', 'sqlite:///civic_lens.db')
+    if db_uri.startswith('sqlite:///'):
+        db_path = db_uri.replace('sqlite:///', '')
+        if not os.path.isabs(db_path):
+            db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', db_path))
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        # Ensure correct formatting for absolute sqlite URI
+        db_uri = 'sqlite:///' + db_path.replace('\\', '/')
+        
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', app.config['SECRET_KEY'])
     app.config['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY', '')
@@ -66,13 +77,6 @@ def create_app(config_name=None):
 
     # Create database tables
     with app.app_context():
-        # Ensure database directory exists if using sqlite
-        db_uri = app.config['SQLALCHEMY_DATABASE_URI']
-        if db_uri.startswith('sqlite:///'):
-            db_path = db_uri.replace('sqlite:///', '')
-            if db_path and os.path.dirname(db_path):
-                os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
-                
         from app import models  # noqa: F401
         db.create_all()
 
